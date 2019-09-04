@@ -13,7 +13,7 @@ SQL Server Management studio or another SQL client
 ### Installing
 Run the PersonDatabase.sql script to create and insert data into the PersonDatabase. If not using MSSQL, this script may need to be altered. 
 
-Import the dbo.Contracts.txt flat file data to a table into the PersonDatabase to answer Question 9.
+Import the dbo.Contracts.txt flat file data to a table into the PersonDatabase to answer Question 3.
 
 ### Submitting Answers
 
