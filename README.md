@@ -19,5 +19,9 @@ Import the dbo.Contracts.txt flat file data to a table into the PersonDatabase t
 
 Please fork this repository and submit your answers for review via a pull request.
 
+### Expectations
+
+This assessment is designed to assess your architecture/design skills.  We are not just looking for an answer but the thought you put into your answers - the why and design.
+
 
 
