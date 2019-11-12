@@ -1,0 +1,313 @@
+USE MASTER
+GO
+IF EXISTS 
+	(
+	SELECT 1 
+	FROM SYS.DATABASES
+	WHERE NAME = 'PersonDatabase'
+	)
+	DROP DATABASE PersonDatabase
+	GO
+
+CREATE DATABASE PersonDatabase
+GO
+
+USE PersonDatabase
+GO
+
+CREATE TABLE dbo.Person
+(
+	PersonID INT
+	, PersonName VARCHAR(255)
+	, Sex VARCHAR(10)
+	, DateofBirth DATETIME
+	, Address VARCHAR(255)
+	, IsActive INT
+)
+
+GO
+
+CREATE TABLE dbo.Risk
+(
+	PersonID VARCHAR(10)
+	, AttributedPayer VARCHAR(255)
+	, RiskScore DECIMAL(10,6)
+	, RiskLevel VARCHAR(10)
+	, RiskDateTime DATETIME
+)
+
+GO
+
+CREATE TABLE dbo.Dates(
+	DateValue datetime NULL,
+	DateDayofMonth int NULL,
+	DateDayofYear int NULL,
+	DateQuarter int NULL,
+	DateWeekdayName varchar(20) NULL,
+	DateMonthName varchar(20) NULL,
+	DateYearMonth char(6) NULL
+) 
+GO
+
+
+
+
+--PERSON DATA
+
+INSERT INTO DBO.PERSON (PersonID, PersonName, Sex, DateofBirth, Address, IsActive)
+VALUES (1, 'Azra (Az) Magnus', 'Male','1997-07-24', '7316 N. Durham St. Morgantown, WV 26508', 1)
+
+INSERT INTO DBO.PERSON (PersonID, PersonName, Sex, DateofBirth, Address, IsActive)
+VALUES (2, 'Palmer Hales (Billy)', 'Male','1951-07-21', '686 Myrtle Dr. Banning, CA 92220', 1)
+
+INSERT INTO DBO.PERSON (PersonID, PersonName, Sex, DateofBirth, Address, IsActive)
+VALUES (3, '(Lilly) Lilla Solano', 'F','1982-05-17', '354 Jockey Hollow Street Hoffman Estates, IL 60169', 1)
+
+INSERT INTO DBO.PERSON (PersonID, PersonName, Sex, DateofBirth, Address, IsActive)
+VALUES (4, 'Romeo Styles', 'Male','1949-06-02', '306 Beach Ave. Springfield, PA 19064', 1)
+
+INSERT INTO DBO.PERSON (PersonID, PersonName, Sex, DateofBirth, Address, IsActive)
+VALUES (5, 'Margot Steed ())', 'Female','1962-03-12', '62 South Peg Shop Street Terre Haute, IN 47802', 1)
+
+--RISK DATA
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (1, 'Cigna',1.231, 'Bronze', getdate() - 3)
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (1, 'Medicare',4.453, 'Gold', getdate() - 5)
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (1, 'Cigna', 2.568, 'Silver', getdate())
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (1, 'Anthem', 3.945, 'Bronze', getdate())
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (2, 'Carefirst',12.51, 'Bronze', getdate() - 3)
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (2, 'Carefirst', 50.201, 'Gold', getdate())
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (4, 'Cigna', 1.231, 'Bronze', getdate())
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (4, 'Anthem', 4.63, 'Silver', getdate())
+
+INSERT INTO DBO.Risk (PersonID, AttributedPayer, RiskScore, RiskLevel, RiskDateTime)
+VALUES (5, 'Medicare', .342, 'Bronze', getdate() - 3)
+
+
+
+/* BELOW SCRIPT WILL POPULATE DATES TABLE FROM A STARTDATE TILL 500 DAYS PRIOR TO CURRENT DATE 
+
+*/
+
+
+   DECLARE @StartDate Date = '20100101', @CutOffDate Date = Dateadd(dd,-500,getdate()), @loopdate date;
+	 
+   SET @loopdate = @startdate;
+
+   WHILE @loopdate <= @CutOffDate
+   BEGIN
+		INSERT INTO Dates VALUES 
+		(   @loopdate,	
+			Day(@loopdate),	
+			DatePart(DY,@loopdate),		  
+		    CASE WHEN Month(@loopdate) IN (1, 2, 3) THEN 1 
+				WHEN Month(@loopdate) IN (4, 5, 6) THEN 2
+				WHEN Month(@loopdate) IN (7, 8, 9) THEN 3
+				WHEN Month(@loopdate) IN (10, 11, 12) THEN 4
+		    END,
+		   Datename(weekday,@loopdate),
+		   DateName(month, @loopdate),
+		   cast(datepart(yyyy, @loopdate) as varchar(4) )+ right( '0' + cast(datepart(mm, @loopdate) as varchar(2)),2)		   
+		) 
+
+		SET @loopdate = DateAdd(d, 1, @loopdate)
+   END
+   GO;
+
+   /* BELOW SCRIPT WILL GETS THE CONTRACTS DATA AFTER COMBINING CONTIGIOUS SEGMENTS
+    NOTE THERE ARE OVERLAPPING SEGMENTS STILL IN THE DATA WHICH WAS NOT REQUIRED TO MERGE AT THIS TIME
+	*/
+
+    DROP TABLE if exists #TEMP
+    DROP TABLE if exists #FINAL
+  
+
+	SELECT  DISTINCT [PersonID]
+			,[ContractStartDate]
+			,[ContractEndDate]
+			,NULL AS 'ExpectedEndDate'
+	INTO #TEMP
+	FROM [dbo].[Contracts]
+	ORDER BY 1, 2 
+
+	;WITH CTE AS
+	(
+		SELECT  [PersonID]
+				,[ContractStartDate]
+				,[ContractEndDate]
+				,level=1
+				,ExpectedEndDate=[ContractEndDate]
+		FROM #TEMP
+		WHERE ExpectedEndDate is null
+
+		UNION ALL
+
+		SELECT  t.[PersonID]
+			,t.[ContractStartDate]
+			,t.[ContractEndDate]
+				,level=c.level+1
+				,c.ExpectedEndDate
+		FROM #TEMP t
+		join CTE c ON t.personid= c.personid and t.[ContractEndDate]=c.[ContractStartDate]
+	)
+
+	SELECT * INTO #final 
+	FROM CTE
+	WHERE level=(select max(level) from CTE)
+
+	UPDATE t
+	SET t.[ContractEndDate]=f.ExpectedEndDate
+	FROM #TEMP t join #FINAL f ON t.personid= f.personid
+								and t.[ContractStartDate]=f.[ContractStartDate]
+								and t.[ContractendDate]=f.[ContractendDate]
+
+	DELETE t
+	FROM #TEMP t join #FINAL f on t.personid= f.personid
+                              and t.[ContractStartDate]=f.[ContractendDate]
+
+	SELECT  PersonID, ContractStartDate as AttributionStartDate, ContractEndDate as AttributionEndDate
+	FROM #TEMP 
+	ORDER BY PersonID,ContractStartDate
+Go;
+
+
+	
+	DROP PROCEDURE IF EXISTS stGetPersonScore
+
+	/* the procedure stGetPersonScore will return all the records of matching partially or fully for scores given
+	score of 3.15 indicates exact match  else it is partial match
+	individual score of 0 indicates no match for the given data
+	the scores factors could be stored/read in a table so that easy to modify the values in future
+	*/
+	CREATE PROCEDURE stGetPersonScore
+		(	@PersonFistName    Varchar(255) = ''
+		   , @PersonLastName    Varchar(255) = ''
+		   , @Sex VARCHAR(10) = ''
+		   , @DateofBirth varchar(8)=''
+		)
+	AS 
+	BEGIN
+			DROP TABLE IF EXISTS #T1		
+			DROP TABLE IF EXISTS #T2
+
+			SELECT PersonID,	LTRIM(RTRIM(replace(replace(PersonName,')',''),'(',''))) as PersonName,	Sex,	DateofBirth	
+			INTO #T1	
+			FROM PERSON with (nolock)
+
+	 		SELECT  PersonID, 
+					ltrim(rtrim(CASE
+						WHEN CHARINDEX(' ', PersonName) > 0
+						THEN SUBSTRING(PersonName, 1, LEN(PersonName) - CHARINDEX(' ', REVERSE(PersonName)))
+						ELSE ''
+					END ))AS FirstName,
+					ltrim(rtrim(CASE
+						WHEN CHARINDEX(' ', PersonName) > 0
+						THEN REVERSE(SUBSTRING(REVERSE(PersonName), 
+								   1, 
+								   CHARINDEX(' ', REVERSE(PersonName)) - 1))
+						ELSE PersonName
+					END )) AS LastName,
+					Sex,	
+					convert(varchar(10),DateofBirth,112) as DateofBirth
+			INTO #T2
+			FROM #T1 
+
+			declare  @LPersonFistName    Varchar(257) 
+			declare @LPersonLastName    Varchar(257) 
+			declare @LSex VARCHAR(12) 
+			declare @LDateofBirth varchar(10)
+			declare @PersonFistNameFS float, @PersonFistNamePS float, @PersonLastNameFS float, @PersonLastNamePS float,
+				@SexFS float,@SexPS float, @DateOfBirthFS float,@DateOfBirthPS float
+
+			SELECT @PersonFistNameFS = 1, @PersonFistNamePS = 0.5, @PersonLastNameFS =0.8, @PersonLastNamePS=0.4,
+				@SexFS =0.6 ,@SexPS = 0.25, @DateOfBirthFS =0.75 ,@DateOfBirthPS = 0.3
+	   
+			SELECT @LPersonFistName = '%'+ltrim(rtrim(isnull(@PersonFistName,'')))+'%',
+				@LPersonLastName = '%'+ltrim(rtrim(isnull(@PersonLastName,'')))+'%',
+				@LSex =  '%'+ltrim(rtrim(isnull(@Sex,'')))+'%',
+				@LDateofBirth = '%'+ltrim(rtrim(isnull(@DateofBirth,'')))+'%'
+	   
+			SELECT SCORE = PersonFirstNameScore+PersonLastNameScore+SexScore+DateOfBirthScore, * 
+			FROM 
+			(
+			SELECT 
+			case when FirstName = @PersonFistName then @PersonFistNameFS 
+					else case when PATINDEX(@LPersonFistName,FirstName) > 0 then @PersonFistNamePS 
+							else 0 
+						end 
+			end  as PersonFirstNameScore,
+			case when LastName = @PersonLastName then @PersonLastNameFS 
+					else case when PATINDEX(@LPersonLastName,LastName) > 0 then @PersonLastNamePS 
+							else 0 
+						end 
+			end  as PersonLastNameScore,
+
+			case when Sex = @Sex then @SexFS 
+					else case when PATINDEX(@LSex,Sex) > 0 then @SexPS 
+							else 0 
+						end 
+			end  as SexScore,
+
+			case when DateOfBirth = @DateOfBirth then @DateOfBirthFS 
+					else case when PATINDEX(@LDateOfBirth,DateOfBirth) > 0 then @DateOfBirthPS 
+							else 0 
+						end 
+			end  as DateOfBirthScore
+			, *
+			--,0.00 as Score
+
+			FROM #T2 
+			)T where (PersonFirstNameScore+PersonLastNameScore+SexScore+DateOfBirthScore ) > 0
+
+
+	END
+	GO;
+
+	/* testing of some data*/
+
+
+		declare @PersonFistName    Varchar(255) = ''
+			, @PersonLastName    Varchar(255) = ''
+			, @Sex VARCHAR(10) = ''
+			, @DateofBirth varchar(8)=''
+
+	   select @PersonFistName = 'Azra Az', @PersonLastName = 'Billy', @Sex = 'M',@DateofBirth = '1997'
+
+	   EXEC stGetPersonScore @PersonFistName, @PersonLastName, @Sex, @DateofBirth
+
+	   
+	   select @PersonFistName = 'TEST', @PersonLastName = 'Billy', @Sex = 'M',@DateofBirth = '200010'
+
+	   EXEC stGetPersonScore @PersonFistName, @PersonLastName, @Sex, @DateofBirth
+
+	   select @PersonFistName = 'Jack', @PersonLastName = 'parker', @Sex = 'U',@DateofBirth = '200010'
+
+	   EXEC stGetPersonScore @PersonFistName, @PersonLastName, @Sex, @DateofBirth
+
+	   /* sample tables provided are all heap tables and data is not much, and these are not standardized either like actual Dim tables
+     
+     */
+
+
+
+
+	
+	
+
+
+
